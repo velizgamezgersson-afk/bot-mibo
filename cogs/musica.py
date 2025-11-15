@@ -2,14 +2,27 @@ import discord
 from discord.ext import commands
 import yt_dlp
 import asyncio
+import os # ¡Importante para leer la nueva llave de API!
 
-# --- Configuración de yt-dlp (YouTube) ---
+# ¡Importar la librería de Google API!
+from googleapiclient.discovery import build
+
+# --- Configuración de llaves y yt-dlp ---
+
+# Cargar la llave de API de YouTube desde las variables de entorno
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
+if not YOUTUBE_API_KEY:
+    print("¡¡¡ERROR CRÍTICO: YOUTUBE_API_KEY no encontrada!!!")
+
+# Crear el "servicio" de YouTube para buscar
+youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+
+# Opciones de yt-dlp (solo para extraer, no para buscar)
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'default_search': 'auto', # <--- CAMBIO 1: De 'soundcloud' a 'auto'
-    'socket_timeout': 10, 
+    'socket_timeout': 10,
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
@@ -17,7 +30,7 @@ YTDL_OPTIONS = {
     }],
 }
 
-# --- Opciones de FFmpeg (Estable) ---
+# Opciones de FFmpeg
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn -loglevel quiet', 
@@ -42,6 +55,7 @@ class MusicPlayer:
         
         loop = self.bot.loop or asyncio.get_event_loop()
         try:
+            # Ahora yt-dlp solo extrae la URL, ¡esto no será bloqueado!
             data = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(YTDL_OPTIONS).extract_info(track_info['url'], download=False))
             source_url = data['url']
         except Exception as e:
@@ -88,40 +102,70 @@ class Musica(commands.Cog):
             await ctx.send(f"No pude conectarme al canal de voz: {e}")
             return None
 
+    # --- FUNCIÓN DE BÚSQUEDA (ACTUALIZADA) ---
+    async def search_youtube(self, query: str):
+        """Busca en YouTube usando la API oficial."""
+        loop = self.bot.loop or asyncio.get_event_loop()
+        
+        def blocking_search():
+            # Esta es la búsqueda oficial de Google/YouTube
+            request = youtube.search().list(
+                part='snippet',
+                q=query,
+                type='video',
+                maxResults=5
+            )
+            return request.execute()
+
+        try:
+            # Ejecutamos la búsqueda en un hilo separado para no bloquear el bot
+            response = await loop.run_in_executor(None, blocking_search)
+            
+            tracks = []
+            for item in response.get('items', []):
+                tracks.append({
+                    'title': item['snippet']['title'],
+                    'uploader': item['snippet']['channelTitle'],
+                    'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}"
+                })
+            return tracks
+            
+        except Exception as e:
+            print(f"Error al buscar con la API de YouTube: {e}")
+            # Esto puede pasar si superas la cuota gratuita de 100 búsquedas
+            if "quotaExceeded" in str(e):
+                return "quota"
+            return None
+
     @commands.command()
     async def mbplay(self, ctx: commands.Context, *, busqueda: str):
-        """Busca en YouTube, muestra 5 opciones y reproduce."""
+        """Busca en YouTube (con API), muestra 5 opciones y reproduce."""
         
         player = await self.get_player(ctx)
         if not player:
             return
 
-        loop = self.bot.loop or asyncio.get_event_loop()
-        try:
-            # --- CAMBIO 2: De 'scsearch5' a 'ytsearch5' ---
-            data = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(YTDL_OPTIONS).extract_info(f"ytsearch5:{busqueda}", download=False))
-            tracks = data.get('entries', [])
-        except Exception as e:
-            await ctx.send(f"Error al buscar en YouTube: {e}")
+        # --- ¡USA LA NUEVA FUNCIÓN DE BÚSQUEDA! ---
+        tracks = await self.search_youtube(busqueda)
+        
+        if tracks == "quota":
+            await ctx.send("¡Error! Se ha superado la cuota de búsqueda diaria de Mibo. Intenta de nuevo mañana.")
             return
-
         if not tracks:
             await ctx.send(f"No encontré ninguna canción en YouTube con '{busqueda}'.")
             return
 
-        # --- CAMBIO 3: Título y color del Embed ---
         embed = discord.Embed(
             title="Resultados de YouTube",
             description="Reacciona con el número de la canción que quieres:",
-            color=discord.Color.red() # Color de YouTube
+            color=discord.Color.red()
         )
         
         emojis_reaccion = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']
         descripcion_embed = ""
         
         for i, track in enumerate(tracks):
-            # Añadimos el "uploader" (artista) para más claridad
-            descripcion_embed += f"{emojis_reaccion[i]} **{track['title']}** (por {track.get('uploader', 'Desconocido')})\n"
+            descripcion_embed += f"{emojis_reaccion[i]} **{track['title']}** (por {track.get('uploader', 'Desconocido')})\"n"
         
         embed.description = descripcion_embed
         
@@ -142,7 +186,8 @@ class Musica(commands.Cog):
         chosen_index = emojis_reaccion.index(str(reaction.emoji))
         chosen_track = tracks[chosen_index]
         
-        track_info = {'title': chosen_track['title'], 'url': chosen_track['webpage_url']}
+        # Guardamos la info (título y URL web)
+        track_info = {'title': chosen_track['title'], 'url': chosen_track['url']}
         
         player.add_to_queue(track_info)
         
