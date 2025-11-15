@@ -25,12 +25,9 @@ async def on_ready():
     # Establecer el estado "Jugando a: !mbayuda"
     activity = discord.Game(name="!mbayuda", type=3)
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    
-    # --- AVISO ---
-    # La carga de Cogs se movió a 'setup_hook' para que ocurra ANTES
-    # de que Render intente conectarse a nuestra mini-web.
 
 # 5. Comandos para Cargar/Descargar Cogs (para el dueño)
+# ... (Los comandos load, unload, reload van aquí) ...
 @bot.command()
 @commands.is_owner()
 async def load(ctx, extension):
@@ -59,23 +56,15 @@ async def reload(ctx, extension):
     except Exception as e:
         await ctx.send(f'Error al recargar {extension}: {e}')
 
-
 # 6. --- ¡EL "TRUCO" PARA RENDER 24/7 GRATIS! ---
-# Esta sección crea una mini-página web que le responde a Render
-# para evitar que el plan gratuito "se duerma" por inactividad.
-
 async def web_server():
     """Crea una mini-web 'estoy vivo' para el plan gratuito de Render."""
-    
-    # Esta función simple responde "¡Estoy vivo!" cuando Render la visita
     async def handle_request(request):
         return web.Response(text="¡Mibo está vivo!")
 
     app = web.Application()
     app.add_routes([web.get('/', handle_request)])
     
-    # Render nos da el puerto a usar en una variable de entorno "PORT"
-    # Usamos 10000 como puerto por defecto si probamos en local
     port = int(os.environ.get("PORT", 10000))
     
     runner = web.AppRunner(app)
@@ -88,9 +77,9 @@ async def web_server():
     except Exception as e:
         print(f"--- Error al iniciar el servidor web de Render: {e} ---")
 
-# Esta función especial se ejecuta ANTES de que el bot inicie sesión
 @bot.event
 async def setup_hook():
+    """Se ejecuta ANTES de que el bot inicie sesión."""
     
     # 1. Cargar todos los Cogs (módulos)
     print("Cargando cogs...")
@@ -106,7 +95,6 @@ async def setup_hook():
     bot.loop.create_task(web_server())
 
 # --- FIN DEL "TRUCO" ---
-
 
 # 7. Ejecutar el Bot
 bot.run(TOKEN)
