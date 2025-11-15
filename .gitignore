@@ -1,0 +1,5 @@
+# Ignorar la "burbuja" de Python
+venv/
+
+# ¡¡IGNORAR EL TOKEN SECRETO!!
+.env

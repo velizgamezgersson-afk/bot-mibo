@@ -2,6 +2,7 @@ import discord
 import os
 from discord.ext import commands
 from dotenv import load_dotenv
+from aiohttp import web # ¡Importante para el "truco" de Render!
 
 # 1. Cargar el Token
 load_dotenv()
@@ -10,7 +11,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 # 2. Definir los "Intents" (Intenciones)
 intents = discord.Intents.default()
 intents.message_content = True
-intents.voice_states = True # ¡Sigue siendo crucial para música!
+intents.voice_states = True
 intents.reactions = True
 
 # 3. Crear la instancia del Bot
@@ -21,17 +22,13 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'¡Mibo está en línea como {bot.user}!')
     
+    # Establecer el estado "Jugando a: !mbayuda"
     activity = discord.Game(name="!mbayuda", type=3)
     await bot.change_presence(status=discord.Status.online, activity=activity)
-
-    print("Cargando cogs...")
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f' - Se cargó {filename}')
-            except Exception as e:
-                print(f' ! No se pudo cargar {filename}: {e}')
+    
+    # --- AVISO ---
+    # La carga de Cogs se movió a 'setup_hook' para que ocurra ANTES
+    # de que Render intente conectarse a nuestra mini-web.
 
 # 5. Comandos para Cargar/Descargar Cogs (para el dueño)
 @bot.command()
@@ -63,9 +60,52 @@ async def reload(ctx, extension):
         await ctx.send(f'Error al recargar {extension}: {e}')
 
 
-# 6. --- ¡SECCIÓN DE MÚSICA ELIMINADA! ---
-# Ya no necesitamos el "setup_hook" ni "NodePool" de Wavelink.
-# El bot ahora es mucho más simple.
+# 6. --- ¡EL "TRUCO" PARA RENDER 24/7 GRATIS! ---
+# Esta sección crea una mini-página web que le responde a Render
+# para evitar que el plan gratuito "se duerma" por inactividad.
+
+async def web_server():
+    """Crea una mini-web 'estoy vivo' para el plan gratuito de Render."""
+    
+    # Esta función simple responde "¡Estoy vivo!" cuando Render la visita
+    async def handle_request(request):
+        return web.Response(text="¡Mibo está vivo!")
+
+    app = web.Application()
+    app.add_routes([web.get('/', handle_request)])
+    
+    # Render nos da el puerto a usar en una variable de entorno "PORT"
+    # Usamos 10000 como puerto por defecto si probamos en local
+    port = int(os.environ.get("PORT", 10000))
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    
+    try:
+        await site.start()
+        print(f"--- Servidor web (para Render) iniciado en el puerto {port} ---")
+    except Exception as e:
+        print(f"--- Error al iniciar el servidor web de Render: {e} ---")
+
+# Esta función especial se ejecuta ANTES de que el bot inicie sesión
+@bot.event
+async def setup_hook():
+    
+    # 1. Cargar todos los Cogs (módulos)
+    print("Cargando cogs...")
+    for filename in os.listdir('./cogs'):
+        if filename.endswith('.py'):
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+                print(f' - Se cargó {filename}')
+            except Exception as e:
+                print(f' ! No se pudo cargar {filename}: {e}')
+    
+    # 2. Iniciar la mini-web (el "truco") en segundo plano
+    bot.loop.create_task(web_server())
+
+# --- FIN DEL "TRUCO" ---
 
 
 # 7. Ejecutar el Bot

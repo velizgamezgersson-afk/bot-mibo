@@ -15,6 +15,7 @@ RUN pip install -r requirements.txt
 
 # 6. Copiar todo el resto del código del bot
 COPY . .
-
+# 6.5. Exponer el puerto para Render
+EXPOSE 10000
 # 7. El comando para iniciar el bot
 CMD ["python", "main.py"]
