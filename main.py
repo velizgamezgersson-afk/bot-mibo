@@ -27,7 +27,6 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
 
 # 5. Comandos para Cargar/Descargar Cogs (para el dueño)
-# ... (Los comandos load, unload, reload van aquí) ...
 @bot.command()
 @commands.is_owner()
 async def load(ctx, extension):

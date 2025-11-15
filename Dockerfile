@@ -1,10 +1,8 @@
-# Pega esto en tu Dockerfile
-
 # 1. Empezar desde una imagen de Python oficial
 FROM python:3.11-slim
 
-# 2. Instalar FFmpeg Y NODEJS (¡LA SOLUCIÓN!)
-RUN apt-get update && apt-get install -y ffmpeg nodejs npm
+# 2. Instalar FFmpeg (¡SOLO FFMPEG!)
+RUN apt-get update && apt-get install -y ffmpeg
 
 # 3. Preparar la carpeta de trabajo
 WORKDIR /app
