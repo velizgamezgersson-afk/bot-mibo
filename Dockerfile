@@ -1,8 +1,8 @@
 # 1. Empezar desde una imagen de Python oficial
 FROM python:3.11-slim
 
-# 2. Instalar FFmpeg (la parte clave)
-RUN apt-get update && apt-get install -y ffmpeg
+# 2. Instalar FFmpeg Y NODEJS (¡LA SOLUCIÓN!)
+RUN apt-get update && apt-get install -y ffmpeg nodejs npm
 
 # 3. Preparar la carpeta de trabajo
 WORKDIR /app
@@ -15,7 +15,9 @@ RUN pip install -r requirements.txt
 
 # 6. Copiar todo el resto del código del bot
 COPY . .
+
 # 6.5. Exponer el puerto para Render
 EXPOSE 10000
+
 # 7. El comando para iniciar el bot
 CMD ["python", "main.py"]
